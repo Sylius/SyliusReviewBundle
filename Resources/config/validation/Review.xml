@@ -11,11 +11,7 @@
 
 -->
 
-<constraint-mapping xmlns="http://symfony.com/schema/dic/constraint-mapping"
-                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-                    xsi:schemaLocation="http://symfony.com/schema/dic/constraint-mapping
-                                        http://symfony.com/schema/dic/services/constraint-mapping-1.0.xsd">
-
+<constraint-mapping xmlns="http://symfony.com/schema/dic/constraint-mapping" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://symfony.com/schema/dic/constraint-mapping http://symfony.com/schema/dic/services/constraint-mapping-1.0.xsd">
     <class name="Sylius\Component\Review\Model\Review">
         <property name="title">
             <constraint name="NotBlank">
@@ -46,5 +42,4 @@
             <option name="groups">sylius_review</option>
         </constraint>
     </class>
-
 </constraint-mapping>
