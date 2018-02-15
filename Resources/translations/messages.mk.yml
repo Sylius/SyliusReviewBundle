@@ -4,6 +4,4 @@
 sylius:
     form:
         review:
-            status:
-                new: sylius.breadcrumb.new
-            title: タイトル
+            title: Наслов
