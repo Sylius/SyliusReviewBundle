@@ -4,7 +4,5 @@
 sylius:
     form:
         review:
-            author: Autor/a
-            status:
-                new: Nou
-            title: Títol
+            author: Autors
+            comment: Komentārs
