@@ -13,21 +13,23 @@ declare(strict_types=1);
 
 namespace Tests\Sylius\Bundle\ReviewBundle\Doctrine\ORM\Subscriber;
 
-use PHPUnit\Framework\TestCase;
-use Sylius\Bundle\ReviewBundle\Doctrine\ORM\Subscriber\LoadMetadataSubscriber;
-use PHPUnit\Framework\MockObject\MockObject;
 use Doctrine\Common\EventSubscriber;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\Event\LoadClassMetadataEventArgs;
 use Doctrine\ORM\Mapping\ClassMetadata;
 use Doctrine\ORM\Mapping\ClassMetadataFactory;
+use PHPUnit\Framework\MockObject\MockObject;
+use PHPUnit\Framework\TestCase;
 use Prophecy\Argument;
+use Sylius\Bundle\ReviewBundle\Doctrine\ORM\Subscriber\LoadMetadataSubscriber;
 
 final class LoadMetadataSubscriberTest extends TestCase
 {
     private LoadMetadataSubscriber $loadMetadataSubscriber;
+
     protected function setUp(): void
     {
+        parent::setUp();
         $this->loadMetadataSubscriber = new LoadMetadataSubscriber([
             'reviewable' => [
                 'subject' => 'AcmeBundle\Entity\ReviewableModel',
@@ -47,30 +49,34 @@ final class LoadMetadataSubscriberTest extends TestCase
 
     public function testImplementsEventSubscriber(): void
     {
-        $this->assertInstanceOf(EventSubscriber::class, $this->loadMetadataSubscriber);
+        self::assertInstanceOf(EventSubscriber::class, $this->loadMetadataSubscriber);
     }
 
     public function testHasSubscribedEvents(): void
     {
-        $this->assertSame(['loadClassMetadata'], $this->loadMetadataSubscriber->getSubscribedEvents());
+        self::assertSame(['loadClassMetadata'], $this->loadMetadataSubscriber->getSubscribedEvents());
     }
 
     public function testMapsProperRelationsForReviewModel(): void
     {
-        /** @var ClassMetadataFactory|MockObject $metadataFactoryMock */
+        /** @var ClassMetadataFactory&MockObject $metadataFactoryMock */
         $metadataFactoryMock = $this->createMock(ClassMetadataFactory::class);
-        /** @var ClassMetadata|MockObject $classMetadataInfoMock */
+        /** @var ClassMetadata&MockObject $classMetadataInfoMock */
         $classMetadataInfoMock = $this->createMock(ClassMetadata::class);
-        /** @var ClassMetadata|MockObject $metadataMock */
+        /** @var ClassMetadata&MockObject $metadataMock */
         $metadataMock = $this->createMock(ClassMetadata::class);
-        /** @var EntityManager|MockObject $entityManagerMock */
+        /** @var EntityManager&MockObject $entityManagerMock */
         $entityManagerMock = $this->createMock(EntityManager::class);
-        /** @var LoadClassMetadataEventArgs|MockObject $eventArgumentsMock */
+        /** @var LoadClassMetadataEventArgs&MockObject $eventArgumentsMock */
         $eventArgumentsMock = $this->createMock(LoadClassMetadataEventArgs::class);
         $eventArgumentsMock->expects($this->once())->method('getClassMetadata')->willReturn($metadataMock);
         $eventArgumentsMock->expects($this->once())->method('getEntityManager')->willReturn($entityManagerMock);
         $entityManagerMock->expects($this->once())->method('getMetadataFactory')->willReturn($metadataFactoryMock);
-        $classMetadataInfoMock->fieldMappings = ['id' => ['columnName' => 'id']];
+        $classMetadataInfoMock->fieldMappings = ['id' => [
+            'columnName' => 'id',
+            'type' => 'integer',  // or another appropriate Doctrine type
+            'fieldName' => 'id',
+        ]];
         $metadataFactoryMock->expects($this->exactly(2))->method('getMetadataFor')->willReturnMap([['AcmeBundle\Entity\ReviewableModel', $classMetadataInfoMock], ['AcmeBundle\Entity\ReviewerModel', $classMetadataInfoMock]]);
         $metadataMock->expects($this->once())->method('getName')->willReturn('AcmeBundle\Entity\ReviewModel');
         $metadataMock->expects($this->once())->method('hasAssociation')->with('reviewSubject')->willReturn(false);
@@ -111,13 +117,13 @@ final class LoadMetadataSubscriberTest extends TestCase
 
     public function testDoesNotMapRelationForReviewModelIfTheRelationAlreadyExists(): void
     {
-        /** @var ClassMetadataFactory|MockObject $metadataFactoryMock */
+        /** @var ClassMetadataFactory&MockObject $metadataFactoryMock */
         $metadataFactoryMock = $this->createMock(ClassMetadataFactory::class);
-        /** @var ClassMetadata|MockObject $metadataMock */
+        /** @var ClassMetadata&MockObject $metadataMock */
         $metadataMock = $this->createMock(ClassMetadata::class);
-        /** @var EntityManager|MockObject $entityManagerMock */
+        /** @var EntityManager&MockObject $entityManagerMock */
         $entityManagerMock = $this->createMock(EntityManager::class);
-        /** @var LoadClassMetadataEventArgs|MockObject $eventArgumentsMock */
+        /** @var LoadClassMetadataEventArgs&MockObject $eventArgumentsMock */
         $eventArgumentsMock = $this->createMock(LoadClassMetadataEventArgs::class);
         $eventArgumentsMock->expects($this->once())->method('getClassMetadata')->willReturn($metadataMock);
         $eventArgumentsMock->expects($this->once())->method('getEntityManager')->willReturn($entityManagerMock);
@@ -130,13 +136,13 @@ final class LoadMetadataSubscriberTest extends TestCase
 
     public function testMapsProperRelationsForReviewableModel(): void
     {
-        /** @var ClassMetadataFactory|MockObject $metadataFactoryMock */
+        /** @var ClassMetadataFactory&MockObject $metadataFactoryMock */
         $metadataFactoryMock = $this->createMock(ClassMetadataFactory::class);
-        /** @var ClassMetadata|MockObject $metadataMock */
+        /** @var ClassMetadata&MockObject $metadataMock */
         $metadataMock = $this->createMock(ClassMetadata::class);
-        /** @var EntityManager|MockObject $entityManagerMock */
+        /** @var EntityManager&MockObject $entityManagerMock */
         $entityManagerMock = $this->createMock(EntityManager::class);
-        /** @var LoadClassMetadataEventArgs|MockObject $eventArgumentsMock */
+        /** @var LoadClassMetadataEventArgs&MockObject $eventArgumentsMock */
         $eventArgumentsMock = $this->createMock(LoadClassMetadataEventArgs::class);
         $eventArgumentsMock->expects($this->once())->method('getClassMetadata')->willReturn($metadataMock);
         $eventArgumentsMock->expects($this->once())->method('getEntityManager')->willReturn($entityManagerMock);
@@ -154,13 +160,13 @@ final class LoadMetadataSubscriberTest extends TestCase
 
     public function testDoesNotMapRelationsForReviewableModelIfTheRelationAlreadyExists(): void
     {
-        /** @var ClassMetadataFactory|MockObject $metadataFactoryMock */
+        /** @var ClassMetadataFactory&MockObject $metadataFactoryMock */
         $metadataFactoryMock = $this->createMock(ClassMetadataFactory::class);
-        /** @var ClassMetadata|MockObject $metadataMock */
+        /** @var ClassMetadata&MockObject $metadataMock */
         $metadataMock = $this->createMock(ClassMetadata::class);
-        /** @var EntityManager|MockObject $entityManagerMock */
+        /** @var EntityManager&MockObject $entityManagerMock */
         $entityManagerMock = $this->createMock(EntityManager::class);
-        /** @var LoadClassMetadataEventArgs|MockObject $eventArgumentsMock */
+        /** @var LoadClassMetadataEventArgs&MockObject $eventArgumentsMock */
         $eventArgumentsMock = $this->createMock(LoadClassMetadataEventArgs::class);
         $eventArgumentsMock->expects($this->once())->method('getClassMetadata')->willReturn($metadataMock);
         $eventArgumentsMock->expects($this->once())->method('getEntityManager')->willReturn($entityManagerMock);
@@ -173,13 +179,13 @@ final class LoadMetadataSubscriberTest extends TestCase
 
     public function testSkipsMappingConfigurationIfMetadataNameIsDifferent(): void
     {
-        /** @var ClassMetadataFactory|MockObject $metadataFactoryMock */
+        /** @var ClassMetadataFactory&MockObject $metadataFactoryMock */
         $metadataFactoryMock = $this->createMock(ClassMetadataFactory::class);
-        /** @var ClassMetadata|MockObject $metadataMock */
+        /** @var ClassMetadata&MockObject $metadataMock */
         $metadataMock = $this->createMock(ClassMetadata::class);
-        /** @var EntityManager|MockObject $entityManagerMock */
+        /** @var EntityManager&MockObject $entityManagerMock */
         $entityManagerMock = $this->createMock(EntityManager::class);
-        /** @var LoadClassMetadataEventArgs|MockObject $eventArgumentsMock */
+        /** @var LoadClassMetadataEventArgs&MockObject $eventArgumentsMock */
         $eventArgumentsMock = $this->createMock(LoadClassMetadataEventArgs::class);
         $this->loadMetadataSubscriber = new LoadMetadataSubscriber([
             'reviewable' => [

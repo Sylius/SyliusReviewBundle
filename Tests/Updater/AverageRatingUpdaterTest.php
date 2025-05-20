@@ -13,10 +13,10 @@ declare(strict_types=1);
 
 namespace Tests\Sylius\Bundle\ReviewBundle\Updater;
 
-use PHPUnit\Framework\TestCase;
-use PHPUnit\Framework\MockObject\MockObject;
-use Sylius\Bundle\ReviewBundle\Updater\AverageRatingUpdater;
 use Doctrine\Persistence\ObjectManager;
+use PHPUnit\Framework\MockObject\MockObject;
+use PHPUnit\Framework\TestCase;
+use Sylius\Bundle\ReviewBundle\Updater\AverageRatingUpdater;
 use Sylius\Bundle\ReviewBundle\Updater\ReviewableRatingUpdaterInterface;
 use Sylius\Component\Review\Calculator\ReviewableRatingCalculatorInterface;
 use Sylius\Component\Review\Model\ReviewableInterface;
@@ -24,47 +24,66 @@ use Sylius\Component\Review\Model\ReviewInterface;
 
 final class AverageRatingUpdaterTest extends TestCase
 {
-    /**
-     * @var ReviewableRatingCalculatorInterface|MockObject
-     */
-    private MockObject $averageRatingCalculatorMock;
-    /**
-     * @var ObjectManager|MockObject
-     */
-    private MockObject $reviewSubjectManagerMock;
+    /** @var ReviewableRatingCalculatorInterface&MockObject */
+    private MockObject $averageRatingCalculator;
+
+    /** @var ObjectManager&MockObject */
+    private MockObject $reviewSubjectManager;
+
     private AverageRatingUpdater $averageRatingUpdater;
+
+    /** @var ReviewableInterface&MockObject */
+    private ReviewableInterface $reviewSubject;
+
     protected function setUp(): void
     {
-        $this->averageRatingCalculatorMock = $this->createMock(ReviewableRatingCalculatorInterface::class);
-        $this->reviewSubjectManagerMock = $this->createMock(ObjectManager::class);
-        $this->averageRatingUpdater = new AverageRatingUpdater($this->averageRatingCalculatorMock, $this->reviewSubjectManagerMock);
+        parent::setUp();
+        $this->averageRatingCalculator = $this->createMock(ReviewableRatingCalculatorInterface::class);
+        $this->reviewSubjectManager = $this->createMock(ObjectManager::class);
+        $this->averageRatingUpdater = new AverageRatingUpdater(
+            $this->averageRatingCalculator,
+            $this->reviewSubjectManager,
+        );
+        $this->reviewSubject = $this->createMock(ReviewableInterface::class);
     }
 
     public function testImplementsProductAverageRatingUpdaterInterface(): void
     {
-        $this->assertInstanceOf(ReviewableRatingUpdaterInterface::class, $this->averageRatingUpdater);
+        self::assertInstanceOf(ReviewableRatingUpdaterInterface::class, $this->averageRatingUpdater);
     }
 
     public function testUpdatesReviewSubjectAverageRating(): void
     {
-        /** @var ReviewableInterface|MockObject $reviewSubjectMock */
-        $reviewSubjectMock = $this->createMock(ReviewableInterface::class);
-        $this->averageRatingCalculatorMock->expects($this->once())->method('calculate')->with($reviewSubjectMock)->willReturn(4.5);
-        $reviewSubjectMock->expects($this->once())->method('setAverageRating')->with(4.5);
-        $this->reviewSubjectManagerMock->expects($this->once())->method('flush');
-        $this->averageRatingUpdater->update($reviewSubjectMock);
+        $this->averageRatingCalculator->expects(self::once())
+            ->method('calculate')
+            ->with($this->reviewSubject)
+            ->willReturn(4.5);
+
+        $this->reviewSubject->expects(self::once())
+            ->method('setAverageRating')
+            ->with(4.5);
+
+        $this->reviewSubjectManager->expects(self::once())->method('flush');
+
+        $this->averageRatingUpdater->update($this->reviewSubject);
     }
 
     public function testUpdatesReviewSubjectAverageRatingFromReview(): void
     {
-        /** @var ReviewableInterface|MockObject $reviewSubjectMock */
-        $reviewSubjectMock = $this->createMock(ReviewableInterface::class);
-        /** @var ReviewInterface|MockObject $reviewMock */
+        /** @var ReviewInterface&MockObject $reviewMock */
         $reviewMock = $this->createMock(ReviewInterface::class);
-        $reviewMock->expects($this->once())->method('getReviewSubject')->willReturn($reviewSubjectMock);
-        $this->averageRatingCalculatorMock->expects($this->once())->method('calculate')->with($reviewSubjectMock)->willReturn(4.5);
-        $reviewSubjectMock->expects($this->once())->method('setAverageRating')->with(4.5);
-        $this->reviewSubjectManagerMock->expects($this->once())->method('flush');
+
+        $reviewMock->expects(self::once())->method('getReviewSubject')->willReturn($this->reviewSubject);
+
+        $this->averageRatingCalculator->expects(self::once())
+            ->method('calculate')
+            ->with($this->reviewSubject)
+            ->willReturn(4.5);
+
+        $this->reviewSubject->expects(self::once())->method('setAverageRating')->with(4.5);
+
+        $this->reviewSubjectManager->expects(self::once())->method('flush');
+
         $this->averageRatingUpdater->updateFromReview($reviewMock);
     }
 }

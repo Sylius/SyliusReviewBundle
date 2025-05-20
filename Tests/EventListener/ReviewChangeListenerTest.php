@@ -13,64 +13,77 @@ declare(strict_types=1);
 
 namespace Tests\Sylius\Bundle\ReviewBundle\EventListener;
 
-use PHPUnit\Framework\TestCase;
-use PHPUnit\Framework\MockObject\MockObject;
-use Sylius\Bundle\ReviewBundle\EventListener\ReviewChangeListener;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Event\PreRemoveEventArgs;
 use Doctrine\Persistence\Event\LifecycleEventArgs;
+use PHPUnit\Framework\MockObject\MockObject;
+use PHPUnit\Framework\TestCase;
+use Sylius\Bundle\ReviewBundle\EventListener\ReviewChangeListener;
 use Sylius\Bundle\ReviewBundle\Updater\ReviewableRatingUpdaterInterface;
 use Sylius\Component\Review\Model\ReviewableInterface;
 use Sylius\Component\Review\Model\ReviewInterface;
 
 final class ReviewChangeListenerTest extends TestCase
 {
-    /**
-     * @var ReviewableRatingUpdaterInterface|MockObject
-     */
-    private MockObject $averageRatingUpdaterMock;
+    /** @var ReviewableRatingUpdaterInterface&MockObject */
+    private MockObject $averageRatingUpdater;
+
     private ReviewChangeListener $reviewChangeListener;
+
+    /** @var LifecycleEventArgs&MockObject */
+    private LifecycleEventArgs $event;
+
+    /** @var ReviewInterface&MockObject */
+    private ReviewInterface $review;
+
+    /** @var ReviewableInterface&MockObject */
+    private ReviewableInterface $reviewSubject;
+
     protected function setUp(): void
     {
-        $this->averageRatingUpdaterMock = $this->createMock(ReviewableRatingUpdaterInterface::class);
-        $this->reviewChangeListener = new ReviewChangeListener($this->averageRatingUpdaterMock);
+        parent::setUp();
+        $this->averageRatingUpdater = $this->createMock(ReviewableRatingUpdaterInterface::class);
+        $this->reviewChangeListener = new ReviewChangeListener($this->averageRatingUpdater);
+        $this->event = $this->createMock(LifecycleEventArgs::class);
+        $this->review = $this->createMock(ReviewInterface::class);
+        $this->reviewSubject = $this->createMock(ReviewableInterface::class);
     }
 
     public function testRecalculatesSubjectRatingOnAcceptedReviewDeletion(): void
     {
-        /** @var LifecycleEventArgs|MockObject $eventMock */
-        $eventMock = $this->createMock(LifecycleEventArgs::class);
-        /** @var ReviewInterface|MockObject $reviewMock */
-        $reviewMock = $this->createMock(ReviewInterface::class);
-        /** @var ReviewableInterface|MockObject $reviewSubjectMock */
-        $reviewSubjectMock = $this->createMock(ReviewableInterface::class);
-        $eventMock->expects($this->once())->method('getObject')->willReturn($reviewMock);
-        $reviewMock->expects($this->once())->method('getReviewSubject')->willReturn($reviewSubjectMock);
-        $this->averageRatingUpdaterMock->expects($this->once())->method('update')->with($reviewSubjectMock);
-        $this->reviewChangeListener->recalculateSubjectRating($eventMock);
+        $this->event->expects(self::once())->method('getObject')->willReturn($this->review);
+
+        $this->review->expects(self::once())->method('getReviewSubject')->willReturn($this->reviewSubject);
+
+        $this->averageRatingUpdater->expects(self::once())->method('update')->with($this->reviewSubject);
+
+        $this->reviewChangeListener->recalculateSubjectRating($this->event);
     }
 
     public function testRemovesAReviewFromAReviewSubjectOnThePreRemoveEvent(): void
     {
-        /** @var ReviewInterface|MockObject $reviewMock */
-        $reviewMock = $this->createMock(ReviewInterface::class);
-        /** @var ReviewableInterface|MockObject $reviewSubjectMock */
-        $reviewSubjectMock = $this->createMock(ReviewableInterface::class);
-        /** @var EntityManagerInterface|MockObject $entityManagerMock */
-        $entityManagerMock = $this->createMock(EntityManagerInterface::class);
-        $event = new PreRemoveEventArgs($reviewMock, $entityManagerMock);
-        $reviewMock->expects($this->once())->method('getReviewSubject')->willReturn($reviewSubjectMock);
-        $reviewSubjectMock->expects($this->once())->method('removeReview')->with($reviewMock);
-        $this->averageRatingUpdaterMock->expects($this->once())->method('update')->with($reviewSubjectMock);
-        $this->reviewChangeListener->recalculateSubjectRating($event);
+        /** @var EntityManagerInterface&MockObject $entityManager */
+        $entityManager = $this->createMock(EntityManagerInterface::class);
+
+        $preRemoveEventArgs = new PreRemoveEventArgs($this->review, $entityManager);
+
+        $this->review->expects(self::once())->method('getReviewSubject')->willReturn($this->reviewSubject);
+
+        $this->reviewSubject->expects(self::once())->method('removeReview')->with($this->review);
+
+        $this->averageRatingUpdater->expects(self::once())->method('update')->with($this->reviewSubject);
+
+        $this->reviewChangeListener->recalculateSubjectRating($preRemoveEventArgs);
     }
 
     public function testDoesNothingIfEventSubjectIsNotReviewObject(): void
     {
-        /** @var LifecycleEventArgs|MockObject $eventMock */
-        $eventMock = $this->createMock(LifecycleEventArgs::class);
-        $eventMock->expects($this->once())->method('getObject')->willReturn('badObject');
-        $this->averageRatingUpdaterMock->expects($this->never())->method('update')->with($this->isInstanceOf(ReviewableInterface::class));
-        $this->reviewChangeListener->recalculateSubjectRating($eventMock);
+        $this->event->expects(self::once())->method('getObject')->willReturn('badObject');
+
+        $this->averageRatingUpdater->expects(self::never())
+            ->method('update')
+            ->with(self::isInstanceOf(ReviewableInterface::class));
+
+        $this->reviewChangeListener->recalculateSubjectRating($this->event);
     }
 }
