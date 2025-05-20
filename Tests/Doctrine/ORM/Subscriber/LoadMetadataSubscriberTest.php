@@ -20,12 +20,23 @@ use Doctrine\ORM\Mapping\ClassMetadata;
 use Doctrine\ORM\Mapping\ClassMetadataFactory;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
-use Prophecy\Argument;
 use Sylius\Bundle\ReviewBundle\Doctrine\ORM\Subscriber\LoadMetadataSubscriber;
 
 final class LoadMetadataSubscriberTest extends TestCase
 {
     private LoadMetadataSubscriber $loadMetadataSubscriber;
+
+    /** @var ClassMetadataFactory&MockObject */
+    private ClassMetadataFactory $metadataFactory;
+
+    /** @var ClassMetadata&MockObject */
+    private ClassMetadata $metadata;
+
+    /** @var EntityManager&MockObject */
+    private EntityManager $entityManager;
+
+    /** @var LoadClassMetadataEventArgs&MockObject */
+    private LoadClassMetadataEventArgs $eventArguments;
 
     protected function setUp(): void
     {
@@ -45,6 +56,10 @@ final class LoadMetadataSubscriberTest extends TestCase
                 ],
             ],
         ]);
+        $this->metadataFactory = $this->createMock(ClassMetadataFactory::class);
+        $this->metadata = $this->createMock(ClassMetadata::class);
+        $this->entityManager = $this->createMock(EntityManager::class);
+        $this->eventArguments = $this->createMock(LoadClassMetadataEventArgs::class);
     }
 
     public function testImplementsEventSubscriber(): void
@@ -59,134 +74,188 @@ final class LoadMetadataSubscriberTest extends TestCase
 
     public function testMapsProperRelationsForReviewModel(): void
     {
-        /** @var ClassMetadataFactory&MockObject $metadataFactoryMock */
-        $metadataFactoryMock = $this->createMock(ClassMetadataFactory::class);
-        /** @var ClassMetadata&MockObject $classMetadataInfoMock */
-        $classMetadataInfoMock = $this->createMock(ClassMetadata::class);
-        /** @var ClassMetadata&MockObject $metadataMock */
-        $metadataMock = $this->createMock(ClassMetadata::class);
-        /** @var EntityManager&MockObject $entityManagerMock */
-        $entityManagerMock = $this->createMock(EntityManager::class);
-        /** @var LoadClassMetadataEventArgs&MockObject $eventArgumentsMock */
-        $eventArgumentsMock = $this->createMock(LoadClassMetadataEventArgs::class);
-        $eventArgumentsMock->expects($this->once())->method('getClassMetadata')->willReturn($metadataMock);
-        $eventArgumentsMock->expects($this->once())->method('getEntityManager')->willReturn($entityManagerMock);
-        $entityManagerMock->expects($this->once())->method('getMetadataFactory')->willReturn($metadataFactoryMock);
-        $classMetadataInfoMock->fieldMappings = ['id' => [
-            'columnName' => 'id',
-            'type' => 'integer',  // or another appropriate Doctrine type
-            'fieldName' => 'id',
-        ]];
-        $metadataFactoryMock->expects($this->exactly(2))->method('getMetadataFor')->willReturnMap([['AcmeBundle\Entity\ReviewableModel', $classMetadataInfoMock], ['AcmeBundle\Entity\ReviewerModel', $classMetadataInfoMock]]);
-        $metadataMock->expects($this->once())->method('getName')->willReturn('AcmeBundle\Entity\ReviewModel');
-        $metadataMock->expects($this->once())->method('hasAssociation')->with('reviewSubject')->willReturn(false);
-        $metadataMock->expects($this->exactly(2))->method('hasAssociation')->willReturnMap([['reviewSubject', false], ['author', false]]);
-        $metadataMock->expects($this->once())->method('mapManyToOne')->with([
-            'fieldName' => 'author',
-            'targetEntity' => 'AcmeBundle\Entity\ReviewerModel',
-            'joinColumns' => [[
-                'name' => 'author_id',
-                'referencedColumnName' => 'id',
-                'nullable' => false,
-                'onDelete' => 'CASCADE',
-            ]],
-            'cascade' => ['persist'],
-        ]);
-        $metadataMock->expects($this->exactly(2))->method('mapManyToOne')->willReturnMap([[[
-            'fieldName' => 'reviewSubject',
-            'targetEntity' => 'AcmeBundle\Entity\ReviewableModel',
-            'inversedBy' => 'reviews',
-            'joinColumns' => [[
-                'name' => 'reviewable_id',
-                'referencedColumnName' => 'id',
-                'nullable' => false,
-                'onDelete' => 'CASCADE',
-            ]],
-        ]], [[
-            'fieldName' => 'author',
-            'targetEntity' => 'AcmeBundle\Entity\ReviewerModel',
-            'joinColumns' => [[
-                'name' => 'author_id',
-                'referencedColumnName' => 'id',
-                'nullable' => false,
-                'onDelete' => 'CASCADE',
-            ]],
-            'cascade' => ['persist'],
-        ]]]);
+        $classMetadataInfo = $this->createMock(ClassMetadata::class);
+
+        $this->eventArguments->expects(self::once())
+            ->method('getClassMetadata')
+            ->willReturn($this->metadata);
+
+        $this->eventArguments->expects(self::once())
+            ->method('getEntityManager')
+            ->willReturn($this->entityManager);
+
+        $this->entityManager->expects(self::once())
+            ->method('getMetadataFactory')
+            ->willReturn($this->metadataFactory);
+
+        $classMetadataInfo->fieldMappings = [
+            'id' => [
+                'columnName' => 'id',
+                'type' => 'integer',
+                'fieldName' => 'id',
+            ],
+        ];
+
+        $this->metadataFactory->expects(self::exactly(2))
+            ->method('getMetadataFor')
+            ->willReturnCallback(function ($className) use ($classMetadataInfo) {
+                if (in_array($className, [
+                    'AcmeBundle\Entity\ReviewableModel',
+                    'AcmeBundle\Entity\ReviewerModel',
+                ])) {
+                    return $classMetadataInfo;
+                }
+                self::fail('Unexpected class name: ' . $className);
+            });
+
+        $this->metadata->expects(self::atLeastOnce())
+            ->method('getName')
+            ->willReturn('AcmeBundle\Entity\ReviewModel');
+
+        $this->metadata->expects(self::exactly(2))
+            ->method('hasAssociation')
+            ->willReturnCallback(function ($field) {
+                if (!in_array($field, ['reviewSubject', 'author'])) {
+                    self::fail('Unexpected field name: ' . $field);
+                }
+
+                return false;
+            });
+
+        $expectedCalls = [
+            [
+                'fieldName' => 'reviewSubject',
+                'targetEntity' => 'AcmeBundle\Entity\ReviewableModel',
+                'inversedBy' => 'reviews',
+                'joinColumns' => [[
+                    'name' => 'reviewable_id',
+                    'referencedColumnName' => 'id',
+                    'nullable' => false,
+                    'onDelete' => 'CASCADE',
+                ]],
+            ],
+            [
+                'fieldName' => 'author',
+                'targetEntity' => 'AcmeBundle\Entity\ReviewerModel',
+                'joinColumns' => [[
+                    'name' => 'author_id',
+                    'referencedColumnName' => 'id',
+                    'nullable' => false,
+                    'onDelete' => 'CASCADE',
+                ]],
+                'cascade' => ['persist'],
+            ],
+        ];
+
+        $callCount = 0;
+        $this->metadata->expects(self::exactly(2))
+            ->method('mapManyToOne')
+            ->willReturnCallback(function ($params) use (&$callCount, $expectedCalls) {
+                self::assertEquals($expectedCalls[$callCount], $params);
+                ++$callCount;
+            });
+
+        $this->loadMetadataSubscriber->loadClassMetadata($this->eventArguments);
     }
 
     public function testDoesNotMapRelationForReviewModelIfTheRelationAlreadyExists(): void
     {
-        /** @var ClassMetadataFactory&MockObject $metadataFactoryMock */
-        $metadataFactoryMock = $this->createMock(ClassMetadataFactory::class);
-        /** @var ClassMetadata&MockObject $metadataMock */
-        $metadataMock = $this->createMock(ClassMetadata::class);
-        /** @var EntityManager&MockObject $entityManagerMock */
-        $entityManagerMock = $this->createMock(EntityManager::class);
-        /** @var LoadClassMetadataEventArgs&MockObject $eventArgumentsMock */
-        $eventArgumentsMock = $this->createMock(LoadClassMetadataEventArgs::class);
-        $eventArgumentsMock->expects($this->once())->method('getClassMetadata')->willReturn($metadataMock);
-        $eventArgumentsMock->expects($this->once())->method('getEntityManager')->willReturn($entityManagerMock);
-        $entityManagerMock->expects($this->once())->method('getMetadataFactory')->willReturn($metadataFactoryMock);
-        $metadataMock->expects($this->once())->method('getName')->willReturn('AcmeBundle\Entity\ReviewModel');
-        $metadataMock->expects($this->exactly(2))->method('hasAssociation')->willReturnMap([['reviewSubject', true], ['author', true]]);
-        $metadataMock->expects($this->never())->method('mapManyToOne');
-        $this->loadMetadataSubscriber->loadClassMetadata($eventArgumentsMock);
+        $this->eventArguments->expects(self::once())
+            ->method('getClassMetadata')
+            ->willReturn($this->metadata);
+
+        $this->eventArguments->expects(self::once())
+            ->method('getEntityManager')
+            ->willReturn($this->entityManager);
+
+        $this->entityManager->expects(self::once())
+            ->method('getMetadataFactory')
+            ->willReturn($this->metadataFactory);
+
+        $this->metadata->expects(self::atLeastOnce())
+            ->method('getName')
+            ->willReturn('AcmeBundle\Entity\ReviewModel');
+
+        $this->metadata->expects(self::exactly(2))
+            ->method('hasAssociation')
+            ->willReturnCallback(function ($field) {
+                if (!in_array($field, ['reviewSubject', 'author'])) {
+                    self::fail('Unexpected field name: ' . $field);
+                }
+
+                return true;
+            });
+
+        $this->metadata->expects(self::never())->method('mapManyToOne');
+
+        $this->loadMetadataSubscriber->loadClassMetadata($this->eventArguments);
     }
 
     public function testMapsProperRelationsForReviewableModel(): void
     {
-        /** @var ClassMetadataFactory&MockObject $metadataFactoryMock */
-        $metadataFactoryMock = $this->createMock(ClassMetadataFactory::class);
-        /** @var ClassMetadata&MockObject $metadataMock */
-        $metadataMock = $this->createMock(ClassMetadata::class);
-        /** @var EntityManager&MockObject $entityManagerMock */
-        $entityManagerMock = $this->createMock(EntityManager::class);
-        /** @var LoadClassMetadataEventArgs&MockObject $eventArgumentsMock */
-        $eventArgumentsMock = $this->createMock(LoadClassMetadataEventArgs::class);
-        $eventArgumentsMock->expects($this->once())->method('getClassMetadata')->willReturn($metadataMock);
-        $eventArgumentsMock->expects($this->once())->method('getEntityManager')->willReturn($entityManagerMock);
-        $entityManagerMock->expects($this->once())->method('getMetadataFactory')->willReturn($metadataFactoryMock);
-        $metadataMock->expects($this->once())->method('getName')->willReturn('AcmeBundle\Entity\ReviewableModel');
-        $metadataMock->expects($this->once())->method('hasAssociation')->with('reviews')->willReturn(false);
-        $metadataMock->expects($this->once())->method('mapOneToMany')->with([
-            'fieldName' => 'reviews',
-            'targetEntity' => 'AcmeBundle\Entity\ReviewModel',
-            'mappedBy' => 'reviewSubject',
-            'cascade' => ['all'],
-        ]);
-        $this->loadMetadataSubscriber->loadClassMetadata($eventArgumentsMock);
+        $this->eventArguments->expects(self::once())
+            ->method('getClassMetadata')
+            ->willReturn($this->metadata);
+
+        $this->eventArguments->expects(self::once())
+            ->method('getEntityManager')
+            ->willReturn($this->entityManager);
+
+        $this->entityManager->expects(self::once())
+            ->method('getMetadataFactory')
+            ->willReturn($this->metadataFactory);
+
+        $this->metadata->expects(self::atLeastOnce())
+            ->method('getName')
+            ->willReturn('AcmeBundle\Entity\ReviewableModel');
+
+        $this->metadata->expects(self::once())
+            ->method('hasAssociation')
+            ->with('reviews')
+            ->willReturn(false);
+
+        $this->metadata->expects(self::once())
+            ->method('mapOneToMany')
+            ->with([
+                'fieldName' => 'reviews',
+                'targetEntity' => 'AcmeBundle\Entity\ReviewModel',
+                'mappedBy' => 'reviewSubject',
+                'cascade' => ['all'],
+            ]);
+
+        $this->loadMetadataSubscriber->loadClassMetadata($this->eventArguments);
     }
 
     public function testDoesNotMapRelationsForReviewableModelIfTheRelationAlreadyExists(): void
     {
-        /** @var ClassMetadataFactory&MockObject $metadataFactoryMock */
-        $metadataFactoryMock = $this->createMock(ClassMetadataFactory::class);
-        /** @var ClassMetadata&MockObject $metadataMock */
-        $metadataMock = $this->createMock(ClassMetadata::class);
-        /** @var EntityManager&MockObject $entityManagerMock */
-        $entityManagerMock = $this->createMock(EntityManager::class);
-        /** @var LoadClassMetadataEventArgs&MockObject $eventArgumentsMock */
-        $eventArgumentsMock = $this->createMock(LoadClassMetadataEventArgs::class);
-        $eventArgumentsMock->expects($this->once())->method('getClassMetadata')->willReturn($metadataMock);
-        $eventArgumentsMock->expects($this->once())->method('getEntityManager')->willReturn($entityManagerMock);
-        $entityManagerMock->expects($this->once())->method('getMetadataFactory')->willReturn($metadataFactoryMock);
-        $metadataMock->expects($this->once())->method('getName')->willReturn('AcmeBundle\Entity\ReviewableModel');
-        $metadataMock->expects($this->once())->method('hasAssociation')->with('reviews')->willReturn(true);
-        $metadataMock->expects($this->never())->method('mapOneToMany');
-        $this->loadMetadataSubscriber->loadClassMetadata($eventArgumentsMock);
+        $this->eventArguments->expects(self::once())
+            ->method('getClassMetadata')
+            ->willReturn($this->metadata);
+
+        $this->eventArguments->expects(self::once())
+            ->method('getEntityManager')
+            ->willReturn($this->entityManager);
+
+        $this->entityManager->expects(self::once())
+            ->method('getMetadataFactory')
+            ->willReturn($this->metadataFactory);
+
+        $this->metadata->expects(self::atLeastOnce())
+            ->method('getName')
+            ->willReturn('AcmeBundle\Entity\ReviewableModel');
+
+        $this->metadata->expects(self::once())
+            ->method('hasAssociation')
+            ->with('reviews')
+            ->willReturn(true);
+
+        $this->metadata->expects(self::never())->method('mapOneToMany');
+
+        $this->loadMetadataSubscriber->loadClassMetadata($this->eventArguments);
     }
 
     public function testSkipsMappingConfigurationIfMetadataNameIsDifferent(): void
     {
-        /** @var ClassMetadataFactory&MockObject $metadataFactoryMock */
-        $metadataFactoryMock = $this->createMock(ClassMetadataFactory::class);
-        /** @var ClassMetadata&MockObject $metadataMock */
-        $metadataMock = $this->createMock(ClassMetadata::class);
-        /** @var EntityManager&MockObject $entityManagerMock */
-        $entityManagerMock = $this->createMock(EntityManager::class);
-        /** @var LoadClassMetadataEventArgs&MockObject $eventArgumentsMock */
-        $eventArgumentsMock = $this->createMock(LoadClassMetadataEventArgs::class);
         $this->loadMetadataSubscriber = new LoadMetadataSubscriber([
             'reviewable' => [
                 'subject' => 'AcmeBundle\Entity\ReviewableModel',
@@ -202,11 +271,25 @@ final class LoadMetadataSubscriberTest extends TestCase
                 ],
             ],
         ]);
-        $eventArgumentsMock->expects($this->once())->method('getClassMetadata')->willReturn($metadataMock);
-        $eventArgumentsMock->expects($this->once())->method('getEntityManager')->willReturn($entityManagerMock);
-        $entityManagerMock->expects($this->once())->method('getMetadataFactory')->willReturn($metadataFactoryMock);
-        $metadataMock->expects($this->once())->method('getName')->willReturn('AcmeBundle\Entity\ReviewModel');
-        $metadataMock->expects($this->exactly(2))->method('mapManyToOne')->willReturnMap([[Argument::type('array')], [Argument::type('array')]]);
-        $this->loadMetadataSubscriber->loadClassMetadata($eventArgumentsMock);
+
+        $this->eventArguments->expects(self::once())
+            ->method('getClassMetadata')
+            ->willReturn($this->metadata);
+
+        $this->eventArguments->expects(self::once())
+            ->method('getEntityManager')
+            ->willReturn($this->entityManager);
+
+        $this->entityManager->expects(self::once())
+            ->method('getMetadataFactory')
+            ->willReturn($this->metadataFactory);
+
+        $this->metadata->expects(self::atLeastOnce())
+            ->method('getName')
+            ->willReturn('AcmeBundle\Entity\ReviewModel');
+        $this->metadata->expects(self::never())
+            ->method('mapManyToOne');
+
+        $this->loadMetadataSubscriber->loadClassMetadata($this->eventArguments);
     }
 }
