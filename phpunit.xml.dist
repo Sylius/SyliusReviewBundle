@@ -11,7 +11,7 @@
     <testsuites>
         <testsuite name="sylius-review-bundle">
             <directory>./test/</directory>
-            <directory>./Tests/</directory>
+            <directory>./tests/</directory>
         </testsuite>
     </testsuites>
 </phpunit>
