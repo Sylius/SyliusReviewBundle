@@ -76,7 +76,7 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "Tests\\Sylius\\Bundle\\ReviewBundle\\": "Tests/"
+            "Tests\\Sylius\\Bundle\\ReviewBundle\\": "tests/"
         },
         "classmap": [
             "test/app/AppKernel.php"
