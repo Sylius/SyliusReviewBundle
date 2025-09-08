@@ -9,7 +9,7 @@ sylius:
             header: 'Bewertung hinzufügen'
             rating: 'Bewertung'
             status:
-                approved: 'Akzeptiert'
+                approved: 'Genehmigt'
                 label: 'Status'
                 new: 'Neu'
                 rejected: 'Abgelehnt'
